@@ -4,13 +4,13 @@ import "./App.css";
 const WEEK_DAYS = ["월", "화", "수", "목", "금", "토", "일"];
 
 const DEFAULT_WEEKLY_PLAN = {
-  월: "상체 운동 40분 + 걷기 20분",
-  화: "하체 운동 40분 + 스트레칭 10분",
-  수: "가벼운 유산소 30분",
-  목: "상체 운동 40분 + 코어 10분",
-  금: "하체 운동 40분 + 걷기 20분",
-  토: "자유 운동 / 산책 40분",
-  일: "휴식 / 가벼운 스트레칭",
+  월: "버피테스트 + 플랭크 4분 / 패배 시 점수차만큼 버피 20개 세트 추가",
+  화: "러닝 / 패배 시 점수차만큼 km 추가",
+  수: "버피테스트 + 플랭크 4분 / 패배 시 점수차만큼 버피 20개 세트 추가",
+  목: "러닝 / 패배 시 점수차만큼 km 추가",
+  금: "버피테스트 + 플랭크 4분 / 패배 시 점수차만큼 버피 20개 세트 추가",
+  토: "러닝 / 패배 시 점수차만큼 km 추가",
+  일: "농구",
 };
 
 const DEFAULT_WEIGHT_LOG = Array.from({ length: 8 }, (_, i) => ({
@@ -28,6 +28,8 @@ const DEFAULT_TODAY_RECORD = {
   snacks: "",
   exercise: "",
   memo: "",
+  baseballResult: "none",
+  scoreDiff: "",
   checks: {
     breakfast: false,
     lunch: false,
@@ -46,6 +48,22 @@ function getStorage(key, fallback) {
     console.error(`${key} 로드 실패`, error);
     return fallback;
   }
+}
+
+function getDayKeyFromDate(dateString) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  const day = date.getDay();
+  const map = {
+    0: "일",
+    1: "월",
+    2: "화",
+    3: "수",
+    4: "목",
+    5: "금",
+    6: "토",
+  };
+  return map[day] || "";
 }
 
 function App() {
@@ -127,6 +145,49 @@ function App() {
     return "조금 더 관리가 필요해요";
   }, [checklistScore]);
 
+  const autoExerciseText = useMemo(() => {
+    const dayKey = getDayKeyFromDate(todayRecord.date);
+    const result = todayRecord.baseballResult;
+    const diff = Number(todayRecord.scoreDiff || 0);
+
+    if (!dayKey) return "날짜를 먼저 선택해줘.";
+
+    if (dayKey === "일") {
+      return "농구";
+    }
+
+    if (result === "none") {
+      if (dayKey === "월" || dayKey === "수" || dayKey === "금") {
+        return "버피테스트 + 플랭크 4분";
+      }
+      if (dayKey === "화" || dayKey === "목" || dayKey === "토") {
+        return "러닝";
+      }
+    }
+
+    if (dayKey === "월" || dayKey === "수" || dayKey === "금") {
+      if (result === "win") {
+        return "간단 스트레칭 + 플랭크 4분";
+      }
+      if (result === "lose") {
+        return diff > 0
+          ? `버피 20개 × ${diff}세트 + 플랭크 4분`
+          : "점수차를 입력해줘.";
+      }
+    }
+
+    if (dayKey === "화" || dayKey === "목" || dayKey === "토") {
+      if (result === "win") {
+        return "러닝";
+      }
+      if (result === "lose") {
+        return diff > 0 ? `러닝 ${diff}km` : "점수차를 입력해줘.";
+      }
+    }
+
+    return "기본 루틴 없음";
+  }, [todayRecord.date, todayRecord.baseballResult, todayRecord.scoreDiff]);
+
   const handleTodayChange = (field, value) => {
     setTodayRecord((prev) => ({
       ...prev,
@@ -163,6 +224,13 @@ function App() {
       date: new Date().toISOString().slice(0, 10),
     });
     setEditingId(null);
+  };
+
+  const applyAutoExercise = () => {
+    setTodayRecord((prev) => ({
+      ...prev,
+      exercise: autoExerciseText,
+    }));
   };
 
   const handleSaveRecord = () => {
@@ -202,6 +270,8 @@ function App() {
       snacks: record.snacks || "",
       exercise: record.exercise || "",
       memo: record.memo || "",
+      baseballResult: record.baseballResult || "none",
+      scoreDiff: record.scoreDiff || "",
       checks: {
         breakfast: record.checks?.breakfast || false,
         lunch: record.checks?.lunch || false,
@@ -225,11 +295,21 @@ function App() {
   };
 
   const feedbackText = useMemo(() => {
+    const baseballResultText =
+      todayRecord.baseballResult === "win"
+        ? "승"
+        : todayRecord.baseballResult === "lose"
+        ? "패"
+        : "경기 없음";
+
     return `아래 기록 보고 식단/운동/수면 기준으로 피드백해줘.
 
 날짜: ${todayRecord.date || "-"}
 오늘 아침 체중: ${todayRecord.weight || "미입력"}kg
 수면 시간: ${todayRecord.sleep || "미입력"}시간
+야구 결과: ${baseballResultText}
+점수차: ${todayRecord.scoreDiff || "미입력"}
+자동 계산 운동: ${autoExerciseText}
 
 아침: ${todayRecord.breakfast || "미입력"}
 점심: ${todayRecord.lunch || "미입력"}
@@ -250,7 +330,7 @@ function App() {
 
 목표는 82kg에서 75kg까지 감량하는 거야.
 너무 딱딱하지 않게, 현실적으로 피드백해줘.`;
-  }, [todayRecord, checklistScore]);
+  }, [todayRecord, checklistScore, autoExerciseText]);
 
   const handleCopyFeedback = async () => {
     try {
@@ -391,6 +471,31 @@ function App() {
                   placeholder="예: 7.5"
                 />
 
+                <div>
+                  <label className="field-label">야구 결과</label>
+                  <select
+                    className="input"
+                    value={todayRecord.baseballResult}
+                    onChange={(e) =>
+                      handleTodayChange("baseballResult", e.target.value)
+                    }
+                  >
+                    <option value="none">경기 없음</option>
+                    <option value="win">승</option>
+                    <option value="lose">패</option>
+                  </select>
+                </div>
+
+                <InputField
+                  label="점수차"
+                  type="number"
+                  value={todayRecord.scoreDiff}
+                  onChange={(e) =>
+                    handleTodayChange("scoreDiff", e.target.value)
+                  }
+                  placeholder="예: 3"
+                />
+
                 <TextField
                   label="아침"
                   value={todayRecord.breakfast}
@@ -425,6 +530,20 @@ function App() {
                   }
                   placeholder="예: 걷기 40분 + 스쿼트 3세트"
                 />
+              </div>
+
+              <div className="section-space">
+                <label className="field-label">자동 계산된 오늘 운동</label>
+                <div className="auto-exercise-box">
+                  <div className="auto-exercise-text">{autoExerciseText}</div>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={applyAutoExercise}
+                  >
+                    운동 칸에 반영
+                  </button>
+                </div>
               </div>
 
               <div className="section-space">
@@ -549,6 +668,17 @@ function App() {
                         </p>
                         <p>
                           <strong>수면:</strong> {record.sleep || "-"}시간
+                        </p>
+                        <p>
+                          <strong>야구 결과:</strong>{" "}
+                          {record.baseballResult === "win"
+                            ? "승"
+                            : record.baseballResult === "lose"
+                            ? "패"
+                            : "경기 없음"}
+                        </p>
+                        <p>
+                          <strong>점수차:</strong> {record.scoreDiff || "-"}
                         </p>
                         <p>
                           <strong>아침:</strong> {record.breakfast || "-"}

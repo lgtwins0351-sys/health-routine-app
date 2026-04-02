@@ -12,7 +12,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -401,6 +402,27 @@ textarea {
 
 .record-body p {
   margin: 0;
+}
+
+.auto-exercise-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 14px;
+}
+
+.auto-exercise-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.5;
+}
+
+select.input {
+  appearance: none;
 }
 
 @media (max-width: 1024px) {
