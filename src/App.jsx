@@ -66,6 +66,81 @@ function getDayKeyFromDate(dateString) {
   return map[day] || "";
 }
 
+function WeightChart({ data }) {
+  const validData = data
+    .map((item) => ({
+      label: item.week,
+      value: item.weight === "" ? null : Number(item.weight),
+    }))
+    .filter((item) => item.value !== null && !Number.isNaN(item.value));
+
+  if (validData.length === 0) {
+    return <div className="chart-empty">체중을 입력하면 그래프가 표시돼.</div>;
+  }
+
+  const width = 640;
+  const height = 220;
+  const padding = 28;
+
+  const values = validData.map((d) => d.value);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const range = maxValue - minValue || 1;
+
+  const points = validData.map((d, index) => {
+    const x =
+      padding +
+      (index * (width - padding * 2)) / Math.max(validData.length - 1, 1);
+    const y =
+      height - padding - ((d.value - minValue) / range) * (height - padding * 2);
+    return { ...d, x, y };
+  });
+
+  const polylinePoints = points.map((p) => `${p.x},${p.y}`).join(" ");
+
+  const gridLines = 4;
+  const yLabels = Array.from({ length: gridLines + 1 }, (_, i) => {
+    const value = maxValue - (range / gridLines) * i;
+    const y = padding + ((height - padding * 2) / gridLines) * i;
+    return { value: value.toFixed(1), y };
+  });
+
+  return (
+    <div className="chart-wrap">
+      <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg" role="img" aria-label="주간 체중 그래프">
+        {yLabels.map((item) => (
+          <g key={`${item.y}-${item.value}`}>
+            <line
+              x1={padding}
+              y1={item.y}
+              x2={width - padding}
+              y2={item.y}
+              className="chart-grid-line"
+            />
+            <text x={4} y={item.y + 4} className="chart-y-label">
+              {item.value}
+            </text>
+          </g>
+        ))}
+
+        <polyline fill="none" points={polylinePoints} className="chart-line" />
+
+        {points.map((point) => (
+          <g key={point.label}>
+            <circle cx={point.x} cy={point.y} r="5" className="chart-dot" />
+            <text x={point.x} y={height - 8} textAnchor="middle" className="chart-x-label">
+              {point.label}
+            </text>
+            <text x={point.x} y={point.y - 12} textAnchor="middle" className="chart-value-label">
+              {point.value}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
 function App() {
   const [startWeight] = useState(82);
   const [goalWeight] = useState(75);
@@ -131,8 +206,7 @@ function App() {
   const progressPercent = latestWeight
     ? Math.min(
         Math.max(
-          ((startWeight - Number(latestWeight)) / (startWeight - goalWeight)) *
-            100,
+          ((startWeight - Number(latestWeight)) / (startWeight - goalWeight)) * 100,
           0
         ),
         100
@@ -148,7 +222,8 @@ function App() {
   const autoExerciseText = useMemo(() => {
     const dayKey = getDayKeyFromDate(todayRecord.date);
     const result = todayRecord.baseballResult;
-    const diff = Number(todayRecord.scoreDiff || 0);
+    const rawDiff = Number(todayRecord.scoreDiff || 0);
+    const diff = Math.min(rawDiff, 5);
 
     if (!dayKey) return "날짜를 먼저 선택해줘.";
 
@@ -170,7 +245,7 @@ function App() {
         return "간단 스트레칭 + 플랭크 4분";
       }
       if (result === "lose") {
-        return diff > 0
+        return rawDiff > 0
           ? `버피 20개 × ${diff}세트 + 플랭크 4분`
           : "점수차를 입력해줘.";
       }
@@ -181,7 +256,7 @@ function App() {
         return "러닝";
       }
       if (result === "lose") {
-        return diff > 0 ? `러닝 ${diff}km` : "점수차를 입력해줘.";
+        return rawDiff > 0 ? `러닝 ${diff}km` : "점수차를 입력해줘.";
       }
     }
 
@@ -355,6 +430,14 @@ function App() {
             <p className="subtitle">
               식단 · 운동 · 수면을 한 번에 관리하는 건강 루틴 웹앱
             </p>
+
+            <div className="logo-wrap">
+              <img
+                src="/lg-twins-logo.png"
+                alt="LG Twins logo"
+                className="team-logo"
+              />
+            </div>
           </div>
 
           <div className="summary-card">
@@ -441,6 +524,11 @@ function App() {
                     />
                   </div>
                 ))}
+              </div>
+
+              <div className="chart-section">
+                <div className="chart-title">체중 그래프</div>
+                <WeightChart data={weightLog} />
               </div>
             </Card>
           </section>
