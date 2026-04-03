@@ -3,16 +3,6 @@ import "./App.css";
 
 const WEEK_DAYS = ["월", "화", "수", "목", "금", "토", "일"];
 
-const DEFAULT_WEEKLY_PLAN = {
-  월: "버피테스트 + 플랭크 4분 / 패배 시 점수차만큼 버피 20개 세트 추가",
-  화: "러닝 / 패배 시 점수차만큼 km 추가",
-  수: "버피테스트 + 플랭크 4분 / 패배 시 점수차만큼 버피 20개 세트 추가",
-  목: "러닝 / 패배 시 점수차만큼 km 추가",
-  금: "버피테스트 + 플랭크 4분 / 패배 시 점수차만큼 버피 20개 세트 추가",
-  토: "러닝 / 패배 시 점수차만큼 km 추가",
-  일: "농구",
-};
-
 const DEFAULT_WEIGHT_LOG = Array.from({ length: 8 }, (_, i) => ({
   week: `${i + 1}주차`,
   weight: "",
@@ -66,7 +56,17 @@ function getDayKeyFromDate(dateString) {
   return map[day] || "";
 }
 
-function WeightChart({ data }) {
+function getFixedPlan(day) {
+  if (day === "월" || day === "수" || day === "금") {
+    return "버피 + 플랭크 코어 루틴";
+  }
+  if (day === "화" || day === "목" || day === "토") {
+    return "러닝 루틴";
+  }
+  return "농구";
+}
+
+function WeightChart({ data, goalWeight = 75 }) {
   const validData = data
     .map((item) => ({
       label: item.week,
@@ -83,8 +83,8 @@ function WeightChart({ data }) {
   const padding = 28;
 
   const values = validData.map((d) => d.value);
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
+  const minValue = Math.min(...values, goalWeight);
+  const maxValue = Math.max(...values, goalWeight);
   const range = maxValue - minValue || 1;
 
   const points = validData.map((d, index) => {
@@ -105,9 +105,17 @@ function WeightChart({ data }) {
     return { value: value.toFixed(1), y };
   });
 
+  const goalY =
+    height - padding - ((goalWeight - minValue) / range) * (height - padding * 2);
+
   return (
     <div className="chart-wrap">
-      <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg" role="img" aria-label="주간 체중 그래프">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="chart-svg"
+        role="img"
+        aria-label="주간 체중 그래프"
+      >
         {yLabels.map((item) => (
           <g key={`${item.y}-${item.value}`}>
             <line
@@ -123,19 +131,53 @@ function WeightChart({ data }) {
           </g>
         ))}
 
+        <line
+          x1={padding}
+          y1={goalY}
+          x2={width - padding}
+          y2={goalY}
+          className="chart-goal-line"
+        />
+        <text
+          x={width - padding}
+          y={goalY - 8}
+          textAnchor="end"
+          className="chart-goal-label"
+        >
+          목표 {goalWeight}kg
+        </text>
+
         <polyline fill="none" points={polylinePoints} className="chart-line" />
 
-        {points.map((point) => (
-          <g key={point.label}>
-            <circle cx={point.x} cy={point.y} r="5" className="chart-dot" />
-            <text x={point.x} y={height - 8} textAnchor="middle" className="chart-x-label">
-              {point.label}
-            </text>
-            <text x={point.x} y={point.y - 12} textAnchor="middle" className="chart-value-label">
-              {point.value}
-            </text>
-          </g>
-        ))}
+        {points.map((point, index) => {
+          const isLatest = index === points.length - 1;
+          return (
+            <g key={point.label}>
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={isLatest ? "6" : "5"}
+                className={isLatest ? "chart-dot latest" : "chart-dot"}
+              />
+              <text
+                x={point.x}
+                y={height - 8}
+                textAnchor="middle"
+                className="chart-x-label"
+              >
+                {point.label}
+              </text>
+              <text
+                x={point.x}
+                y={point.y - 12}
+                textAnchor="middle"
+                className="chart-value-label"
+              >
+                {point.value}
+              </text>
+            </g>
+          );
+        })}
       </svg>
     </div>
   );
@@ -144,10 +186,6 @@ function WeightChart({ data }) {
 function App() {
   const [startWeight] = useState(82);
   const [goalWeight] = useState(75);
-
-  const [weeklyPlan, setWeeklyPlan] = useState(() =>
-    getStorage("daily-routine-weekly-plan", DEFAULT_WEEKLY_PLAN)
-  );
 
   const [weightLog, setWeightLog] = useState(() =>
     getStorage("daily-routine-weight-log", DEFAULT_WEIGHT_LOG)
@@ -163,13 +201,6 @@ function App() {
 
   const [editingId, setEditingId] = useState(null);
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    localStorage.setItem(
-      "daily-routine-weekly-plan",
-      JSON.stringify(weeklyPlan)
-    );
-  }, [weeklyPlan]);
 
   useEffect(() => {
     localStorage.setItem("daily-routine-weight-log", JSON.stringify(weightLog));
@@ -263,6 +294,13 @@ function App() {
     return "기본 루틴 없음";
   }, [todayRecord.date, todayRecord.baseballResult, todayRecord.scoreDiff]);
 
+  useEffect(() => {
+    setTodayRecord((prev) => ({
+      ...prev,
+      exercise: autoExerciseText,
+    }));
+  }, [autoExerciseText]);
+
   const handleTodayChange = (field, value) => {
     setTodayRecord((prev) => ({
       ...prev,
@@ -280,13 +318,6 @@ function App() {
     }));
   };
 
-  const handleWeeklyPlanChange = (day, value) => {
-    setWeeklyPlan((prev) => ({
-      ...prev,
-      [day]: value,
-    }));
-  };
-
   const handleWeightLogChange = (index, value) => {
     setWeightLog((prev) =>
       prev.map((item, i) => (i === index ? { ...item, weight: value } : item))
@@ -299,13 +330,6 @@ function App() {
       date: new Date().toISOString().slice(0, 10),
     });
     setEditingId(null);
-  };
-
-  const applyAutoExercise = () => {
-    setTodayRecord((prev) => ({
-      ...prev,
-      exercise: autoExerciseText,
-    }));
   };
 
   const handleSaveRecord = () => {
@@ -493,15 +517,7 @@ function App() {
                 {WEEK_DAYS.map((day) => (
                   <div key={day} className="row-block">
                     <label className="day-label">{day}</label>
-                    <input
-                      className="input"
-                      type="text"
-                      value={weeklyPlan[day]}
-                      onChange={(e) =>
-                        handleWeeklyPlanChange(day, e.target.value)
-                      }
-                      placeholder={`${day} 운동 계획 입력`}
-                    />
+                    <div className="fixed-plan">{getFixedPlan(day)}</div>
                   </div>
                 ))}
               </div>
@@ -528,7 +544,7 @@ function App() {
 
               <div className="chart-section">
                 <div className="chart-title">체중 그래프</div>
-                <WeightChart data={weightLog} />
+                <WeightChart data={weightLog} goalWeight={goalWeight} />
               </div>
             </Card>
           </section>
@@ -624,13 +640,9 @@ function App() {
                 <label className="field-label">자동 계산된 오늘 운동</label>
                 <div className="auto-exercise-box">
                   <div className="auto-exercise-text">{autoExerciseText}</div>
-                  <button
-                    type="button"
-                    className="primary-button"
-                    onClick={applyAutoExercise}
-                  >
-                    운동 칸에 반영
-                  </button>
+                  <div className="auto-exercise-helper">
+                    운동 칸에 자동 반영되고 있어.
+                  </div>
                 </div>
               </div>
 
